@@ -38,8 +38,14 @@ exports.use = function(test) {
 };
 
 exports.expires = function(test) {
-    test.expect(1);
-    defaultLimiter.use('ttl', function(err) {
+    test.expect(2);
+    var limiter = new RollingLimit({
+        interval: 250,
+        limit: 3,
+        redis: redisClient,
+        prefix: prefix
+    });
+    limiter.use('ttl', function(err) {
         if (err) {
             throw err;
         }
@@ -47,9 +53,49 @@ exports.expires = function(test) {
             if (err) {
                 throw err;
             }
-            test.ok(res > 4000 && res <= 5000);
-            test.done();
+            test.ok(res > 50 && res <= 250);
         });
+
+        setTimeout(function() {
+            limiter.use('ttl', 0, function(err, res) {
+                if (err) {
+                    throw err;
+                }
+                test.equal(res, 3);
+                test.done();
+            });
+        }, 500);
+    });
+};
+
+exports.rolling = function(test) {
+    test.expect(3);
+    var limiter = new RollingLimit({
+        interval: 500,
+        limit: 2,
+        redis: redisClient,
+        prefix: prefix
+    });
+    limiter.use('rolling100', function(err, res) {
+        if (err) {
+            throw err;
+        }
+        test.equal(res, 1);
+
+        setTimeout(function() {
+            //this is running sooner than 500 so there should be none left
+            limiter.use('rolling100', function(err, res) {
+                test.equal(res, 0);
+            });
+        }, 300);
+
+        setTimeout(function() {
+            //by the time this runs, the original one should've been removed
+            limiter.use('rolling100', function(err, res) {
+                test.equal(res, 0);
+                test.done();
+            });
+        }, 700);
     });
 };
 
@@ -72,6 +118,39 @@ exports.fill = function(test) {
                 test.done();
             });
         });
+    });
+};
+
+exports.useMultiple = function(test) {
+    test.expect(1);
+    defaultLimiter.use('use2', 2, function(err, res) {
+        if (err) {
+            throw err;
+        }
+        test.equal(res, 1);
+        test.done();
+    });
+};
+
+exports.useMoreThanLimit = function(test) {
+    test.expect(1);
+    defaultLimiter.use('use4', 4, function(err, res) {
+        if (err) {
+            throw err;
+        }
+        test.equal(res, -1);
+        test.done();
+    });
+};
+
+exports.useZero = function(test) {
+    test.expect(1);
+    defaultLimiter.use('use0', 0, function(err, res) {
+        if (err) {
+            throw err;
+        }
+        test.equal(res, 3);
+        test.done();
     });
 };
 

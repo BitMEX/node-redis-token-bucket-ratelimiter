@@ -1,6 +1,8 @@
 # redis-rolling-limit #
 
-Implement a rolling rate limit in redis
+A rolling rate limit using Redis. Original idea from [Peter Hayes](https://engineering.classdojo.com/blog/2015/02/06/rolling-rate-limiter/).
+Uses a lua script for atomic operations and to prevent blocked actions from substracting
+from the bucket.
 
 ### Usage ###
 
@@ -21,11 +23,19 @@ Options:
 * `prefix`: (optional) a string to prepend before `id` for each key
 
 ### limiter.use(id, callback) ###
+### limiter.use(id, amount, callback) ###
 
 Takes a token from the limit's bucket for `id` in redis and calls `callback` with
-(error, numLeft). `numLeft` is the number of tokens left in the bucket.
+(error, numLeft). `numLeft` is the number of tokens left in the bucket. `amount`
+is the number of tokens to take from the bucket and defaults to `1`. If you wanted
+to get the count of tokens left, send in an `amount` of `0`.
 
 ### limiter.fill(id, callback) ###
 
 Re-fills the bucket for `id` in redis to max capacity. `callback` is called with
 (error).
+
+## Caveats ##
+
+* If `interval` is greater than 12 days (1073741823) then some tokens might not be
+counted. The tradeoff is saving 4+ characters per set member in redis.

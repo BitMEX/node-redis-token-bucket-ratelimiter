@@ -1,5 +1,5 @@
 var util = require('util'),
-    luaScript = require('./rollingLimit.lua.json'),
+    luaScript = require('./lua/rollingLimit.lua.json'),
     debug = util.debuglog('redis-rolling-limit');
 
 function RollingLimit(options) {
@@ -25,23 +25,29 @@ function RollingLimit(options) {
     this.prefix = options.prefix || '';
 }
 
-RollingLimit.prototype.use = function(id, cb) {
-    if (typeof cb !== 'function') {
+RollingLimit.prototype.use = function(id, amt, cb) {
+    var amount = amt,
+        callback = cb;
+    if (typeof amount === 'function') {
+        callback = amount;
+        amount = 1;
+    } else if (typeof callback !== 'function') {
         throw new TypeError('callback must be a function');
     }
-    this.redis.evalsha(luaScript.sha1, 1, this.prefix + id, this.limit, this.interval, Date.now(), function(err, res) {
-        if (err) {
-            //NOSCRIPT just means it hasn't been cached yet
-            if (!(err instanceof Error) || err.message.indexOf('NOSCRIPT') === -1) {
-                debug('evalsha error:', err);
-                cb(err, 0);
-                return;
-            }
-            //noinspection JSLint
-            this.redis.eval(luaScript.script, 1, this.prefix + id, this.limit, this.interval, Date.now(), cb);
+    this.redis.evalsha(luaScript.sha1, 1, this.prefix + id, this.limit, this.interval, Date.now(), amount, function(err, res) {
+        if (!err) {
+            callback(null, res);
             return;
         }
-        cb(null, res);
+        //handle errors
+        //NOSCRIPT just means it hasn't been cached yet
+        if (!(err instanceof Error) || err.message.indexOf('NOSCRIPT') === -1) {
+            debug('evalsha error:', err);
+            callback(err, 0);
+            return;
+        }
+        //noinspection JSLint
+        this.redis.eval(luaScript.script, 1, this.prefix + id, this.limit, this.interval, Date.now(), amount, callback);
     }.bind(this));
 };
 
