@@ -34,8 +34,3 @@ to get the count of tokens left, send in an `amount` of `0`.
 
 Re-fills the bucket for `id` in redis to max capacity. `callback` is called with
 (error).
-
-## Caveats ##
-
-* If `interval` is greater than 12 days (1073741823) then some tokens might not be
-counted. The tradeoff is saving 4+ characters per set member in redis.
