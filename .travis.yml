@@ -1,7 +1,7 @@
 language: node_js
 node_js:
   - stable
-  - iojs
+  - v5
 notifications:
   email: false
 services:
