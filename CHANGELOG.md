@@ -1,5 +1,9 @@
 ## Changelog ##
 
+### 0.2.0 ###
+* Removed bitwise on time which removes caveat
+* Reformatted lua to match golib version
+
 ### 0.1.0 ###
 * Added amount option to `use`
 * Changed format in redis to store hex compressed timestamps
