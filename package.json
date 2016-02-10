@@ -12,7 +12,7 @@
     "sha1": "^1.1.1"
   },
   "scripts": {
-    "test": "NODE_DEBUG=redis-rolling-limit nodeunit tests"
+    "test": "nodeunit tests"
   },
   "repository": {
     "type": "git",
@@ -27,5 +27,8 @@
   ],
   "author": "James Hartig <fastest963@gmail.com>",
   "license": "MIT",
-  "readmeFilename": "README.md"
+  "readmeFilename": "README.md",
+  "dependencies": {
+    "levenlabs-log": "^0.1.1"
+  }
 }

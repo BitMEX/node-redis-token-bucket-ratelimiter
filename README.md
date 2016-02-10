@@ -30,7 +30,9 @@ Takes a token from the limit's bucket for `id` in redis and calls `callback` wit
 is the number of tokens to take from the bucket and defaults to `1`. If you wanted
 to get the count of tokens left, send in an `amount` of `0`.
 
+Returns a promise that can be used instead of the callback.
+
 ### limiter.fill(id, callback) ###
 
 Re-fills the bucket for `id` in redis to max capacity. `callback` is called with
-(error).
+(error). Returns a promise that can be used instead of the callback.

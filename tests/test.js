@@ -22,7 +22,9 @@ exports.use = function(test) {
         numLeft--;
         defaultLimiter.use('use1', function(err, res) {
             if (err) {
-                throw err;
+                console.log('use1 error', err);
+                test.done();
+                return;
             }
             test.equal(res, numLeft);
             if (numLeft > -1) {
@@ -47,11 +49,15 @@ exports.expires = function(test) {
     });
     limiter.use('ttl', function(err) {
         if (err) {
-            throw err;
+            console.log('ttl error', err);
+            test.done();
+            return;
         }
         redisClient.pttl(prefix + 'ttl', function(err, res) {
             if (err) {
-                throw err;
+                console.log('prefix ttl error', err);
+                test.done();
+                return;
             }
             test.ok(res > 50 && res <= 250);
         });
@@ -59,7 +65,9 @@ exports.expires = function(test) {
         setTimeout(function() {
             limiter.use('ttl', 0, function(err, res) {
                 if (err) {
-                    throw err;
+                    console.log('ttl2 error', err);
+                    test.done();
+                    return;
                 }
                 test.equal(res, 3);
                 test.done();
@@ -78,13 +86,19 @@ exports.rolling = function(test) {
     });
     limiter.use('rolling100', function(err, res) {
         if (err) {
-            throw err;
+            console.log('rolling100 error', err);
+            test.done();
+            return;
         }
         test.equal(res, 1);
 
         setTimeout(function() {
             //this is running sooner than 500 so there should be none left
             limiter.use('rolling100', function(err, res) {
+                if (err) {
+                    console.log('rolling100 in setTimeout1 error', err);
+                    return;
+                }
                 test.equal(res, 0);
             });
         }, 300);
@@ -92,6 +106,11 @@ exports.rolling = function(test) {
         setTimeout(function() {
             //by the time this runs, the original one should've been removed
             limiter.use('rolling100', function(err, res) {
+                if (err) {
+                    console.log('rolling100 in setTimeout2 error', err);
+                    test.done();
+                    return;
+                }
                 test.equal(res, 0);
                 test.done();
             });
@@ -101,23 +120,16 @@ exports.rolling = function(test) {
 
 exports.fill = function(test) {
     test.expect(2);
-    defaultLimiter.use('fill', function(err, numLeft) {
-        if (err) {
-            throw err;
-        }
+    defaultLimiter.use('fill').then(function(numLeft) {
         test.equal(numLeft, 2);
-        defaultLimiter.fill('fill', function(err) {
-            if (err) {
-                throw err;
-            }
-            defaultLimiter.use('fill', function(err, numLeft) {
-                if (err) {
-                    throw err;
-                }
-                test.equal(numLeft, 2);
-                test.done();
-            });
-        });
+        return defaultLimiter.fill('fill');
+    }).then(function() {
+        return defaultLimiter.use('fill');
+    }).then(function(numLeft) {
+        test.equal(numLeft, 2);
+        test.done();
+    }).catch(function(err) {
+        test.done();
     });
 };
 
@@ -125,7 +137,9 @@ exports.useMultiple = function(test) {
     test.expect(1);
     defaultLimiter.use('use2', 2, function(err, res) {
         if (err) {
-            throw err;
+            console.log('use2 error', err);
+            test.done();
+            return;
         }
         test.equal(res, 1);
         test.done();
@@ -136,7 +150,9 @@ exports.useMoreThanLimit = function(test) {
     test.expect(1);
     defaultLimiter.use('use4', 4, function(err, res) {
         if (err) {
-            throw err;
+            console.log('use4 error', err);
+            test.done();
+            return;
         }
         test.equal(res, -1);
         test.done();
@@ -145,11 +161,11 @@ exports.useMoreThanLimit = function(test) {
 
 exports.useZero = function(test) {
     test.expect(1);
-    defaultLimiter.use('use0', 0, function(err, res) {
-        if (err) {
-            throw err;
-        }
+    defaultLimiter.use('use0', 0).then(function(res) {
         test.equal(res, 3);
+        test.done();
+    }).catch(function(err) {
+        console.log('error in useZero chain', err);
         test.done();
     });
 };

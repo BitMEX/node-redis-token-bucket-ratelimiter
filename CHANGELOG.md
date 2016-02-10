@@ -1,5 +1,9 @@
 ## Changelog ##
 
+### 0.3.0 ###
+* Methods now return promises
+* Now using levenlabs-log
+
 ### 0.2.0 ###
 * Removed bitwise on time which removes caveat
 * Reformatted lua to match golib version
