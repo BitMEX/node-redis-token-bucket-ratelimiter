@@ -92,24 +92,27 @@ RollingLimit.prototype.fill = function(id, callback) {
     }
     log.debug('rollinglimit: fill called', {id: id});
     return new Promise(function(resolve, reject) {
-        this.redis.zremrangebyrank(this.prefix + id, 0, -1, function(err, res) {
-            if (err) {
-                log.error('rollinglimit: error calling zremrangebyrank', {
-                    id: id,
-                    error: err
+    
+        var finished = false;
+        var cb = function(err,res){
+            if(err){
+                log.error('rollinglimit: error calling set', {
+                  id: id,
+                  error: err
                 });
                 reject(err);
-            } else {
-                log.debug('rollinglimit: fill success', {
-                    id: id,
-                    result: res
-                });
-                resolve();
-            }
-            if (callback) {
                 callback(err);
             }
-        });
+            else if(!finished) finished = true; // poor man's after(2)
+            else{
+                log.debug('rollinglimit: fill success', { id: id });
+                resolve();
+                callback();
+            }
+        };
+
+        this.redis.set(this.prefix + id       , this.limit, 'PX', this.limit,cb);
+        this.redis.set(this.prefix + id + ':T', Date.now(), 'PX', this.limit,cb);
     }.bind(this));
 };
 

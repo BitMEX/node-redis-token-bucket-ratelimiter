@@ -1,33 +1,38 @@
 -- key limit intervalMS nowMS [amount]
-local key = KEYS[1]
-local limit = tonumber(ARGV[1])
+local key        = KEYS[1]
+local limit      = tonumber(ARGV[1])
 local intervalMS = tonumber(ARGV[2])
-local nowMS = tonumber(ARGV[3])
+local nowMS      = tonumber(ARGV[3])
 -- default the amount to 1 unless they specified one
 local amount = 1
 if ARGV[4] then
     amount = math.max(tonumber(ARGV[4]), 0)
 end
 
-redis.call('ZREMRANGEBYSCORE', key, '-inf', nowMS - intervalMS)
-local num = redis.call('ZCARD', key)
+local ts_key = key .. ":T";
 
-local left = limit - num - amount
--- if we're already over the limit don't bother adding another timestamp
-if left < 0 then
-    return -1
-end
+local tokens       = redis.call('GET',key);
+local lastUpdateMS = redis.call('GET',ts_key);
 
--- convert to hex to save space
--- append the num on the end so it doesn't clash with other values at same nowMS
-if amount > 0 then
-    local args = {'ZADD', key}
-    for i = 1, amount do
-        args[(i * 2) + 1] = nowMS
-        args[(i * 2) + 2] = string.format("%x%x%s", nowMS, num, i)
-    end
-    redis.call(unpack(args))
-    -- only actually update expire if they added a new token
-    redis.call('PEXPIRE', key, intervalMS)
+if tokens == false then tokens = limit end;
+if lastUpdateMS == false then lastUpdateMS = nowMS end;
+
+local addTokens = math.floor(((nowMS - lastUpdateMS) / intervalMS) * limit);
+
+local newTokens = tokens + addTokens;
+
+if newTokens > limit then newTokens = limit end;
+
+newTokens = newTokens - amount;
+
+if newTokens >= 0 then
+  -- valid request
+  redis.call('SET',ts_key,nowMS);
+  if newTokens ~= tokens then redis.call('SET',key,newTokens) end;
+  redis.call('PEXPIRE',key,intervalMS);
+  redis.call('PEXPIRE',ts_key,intervalMS);
+  return newTokens;
+else
+  -- invalid request
+  return -1;
 end
-return left
