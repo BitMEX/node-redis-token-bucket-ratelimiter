@@ -3,36 +3,62 @@ local key        = KEYS[1]
 local limit      = tonumber(ARGV[1])
 local intervalMS = tonumber(ARGV[2])
 local nowMS      = tonumber(ARGV[3])
--- default the amount to 1 unless they specified one
-local amount = 1
-if ARGV[4] then
-    amount = math.max(tonumber(ARGV[4]), 0)
-end
+local amount     = math.max(tonumber(ARGV[4]), 0)
+local force      = ARGV[5] == "true"
 
-local ts_key = key .. ":T";
+local timestampKey = key .. ":T"
 
-local tokens       = redis.call('GET',key);
-local lastUpdateMS = redis.call('GET',ts_key);
+local prevTokens = redis.call('GET',key)
+local lastUpdateMS
 
-if tokens == false then tokens = limit end;
-if lastUpdateMS == false then lastUpdateMS = nowMS end;
-
-local addTokens = math.floor(((nowMS - lastUpdateMS) / intervalMS) * limit);
-
-local newTokens = tokens + addTokens;
-
-if newTokens > limit then newTokens = limit end;
-
-newTokens = newTokens - amount;
-
-if newTokens >= 0 then
-  -- valid request
-  redis.call('SET',ts_key,nowMS);
-  if newTokens ~= tokens then redis.call('SET',key,newTokens) end;
-  redis.call('PEXPIRE',key,intervalMS);
-  redis.call('PEXPIRE',ts_key,intervalMS);
-  return newTokens;
+if prevTokens == false then
+   prevTokens = amount
+   lastUpdateMS = nowMS
 else
-  -- invalid request
-  return -1;
+   lastUpdateMS = redis.call('GET',timestampKey)
+   if(lastUpdateMS == false) then lastUpdateMS = nowMS end
 end
+
+local addTokens = ((nowMS - lastUpdateMS) / intervalMS) * limit
+local newTokens = math.min(prevTokens + addTokens, limit)
+local balanceTokens = newTokens - amount
+
+local rejected
+local refillDelta
+
+if balanceTokens < 0 then
+   if force then
+      balanceTokens = 0
+      if amount <= limit then
+	 refillDelta = math.ceil((amount / limit) * intervalMS)
+      else
+	 refillDelta = -1
+      end
+      rejected = 0
+   else
+      balanceTokens = newTokens
+      if amount <= limit then
+	 refillDelta = math.ceil(((amount - balanceTokens) / limit) * intervalMS)
+      else
+	 refillDelta = -1
+      end
+      rejected = 1
+   end
+else
+   local nextBalance = balanceTokens - amount
+   if(nextBalance < 0) then
+      refillDelta = ((0 - nextBalance) / limit) * intervalMS
+   else
+      refillDelta = 0
+   end
+   rejected = 0
+end
+
+-- rejected requests don't cost anything
+-- forced requests show up here as !rejected, but with balanceTokens = 0 (drained)
+if rejected == 0 then
+   redis.call('PSETEX',key,intervalMS,balanceTokens)
+   redis.call('PSETEX',timestampKey,intervalMS,nowMS)
+end
+
+return { balanceTokens, rejected, refillDelta }
