@@ -12,8 +12,8 @@ function RollingLimit(options) {
     if (typeof options.limit !== 'number') {
         throw new TypeError('limit must be a number');
     }
-    if (options.limit < 0) {
-        throw new Error('limit must be >= 0');
+    if (options.limit <= 0) {
+        throw new Error('limit must be > 0');
     }
     //noinspection JSLint
     if (!options.redis || typeof options.redis.eval !== 'function') {
@@ -47,6 +47,10 @@ RollingLimit.prototype.use = function(id, amt, cb) {
     if (amount < 0) {
         throw new Error('amount must be >= 0');
     }
+    if (amount > this.limit) {
+        throw new Error(`amount must be < limit (${this.limit})`);
+    }
+
     if(!callback) callback = function(){};
 
     log.debug('rollinglimit: use called', {id: id, amount: amount});
@@ -58,7 +62,8 @@ RollingLimit.prototype.use = function(id, amt, cb) {
                                                                  });
                           res = { remaining: res[0],
                                   rejected: !!res[1],
-                                  delta: res[2]
+                                  retryDelta: res[2],
+                                  fillDelta: res[3]
                                 };
                           resolve(res);
                           callback(null, res);

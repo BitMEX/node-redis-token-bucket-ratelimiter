@@ -19,40 +19,43 @@ else
    if(lastUpdateMS == false) then lastUpdateMS = nowMS end
 end
 
+-- tokens that should have been added by now
 local addTokens = ((nowMS - lastUpdateMS) / intervalMS) * limit
+
+-- calculated token balance coming into this transaction
 local newTokens = math.min(prevTokens + addTokens, limit)
+
+-- token balance after trying this transaction
 local balanceTokens = newTokens - amount
 
-local rejected
-local refillDelta
+-- time to fill enough to retry this amount
+local retryDelta
 
-if balanceTokens < 0 then
-   if force then
-      balanceTokens = 0
-      if amount <= limit then
-	 refillDelta = math.ceil((amount / limit) * intervalMS)
-      else
-	 refillDelta = -1
-      end
+-- boolean verdict
+local rejected
+
+-- lets play our game
+if balanceTokens < 0 then -- we used more than we have
+   if force then -- ugh, /fine/
       rejected = 0
+      balanceTokens = 0 -- drain the swamp
    else
-      balanceTokens = newTokens
-      if amount <= limit then
-	 refillDelta = math.ceil(((amount - balanceTokens) / limit) * intervalMS)
-      else
-	 refillDelta = -1
-      end
       rejected = 1
+      balanceTokens = newTokens -- rejection doesn't eat tokens
    end
-else
-   local nextBalance = balanceTokens - amount
-   if(nextBalance < 0) then
-      refillDelta = ((0 - nextBalance) / limit) * intervalMS
-   else
-      refillDelta = 0
-   end
+   retryDelta = math.ceil(((amount - balanceTokens) / limit) * intervalMS)
+else -- polite transaction
    rejected = 0
+   local nextBalance = balanceTokens - amount
+   if(nextBalance < 0) then -- will need to wait to repeat
+      retryDelta = math.ceil(((0 - nextBalance) / limit) * intervalMS)
+   else -- can repeat with current balance, no wait
+      retryDelta = 0
+   end
 end
+
+-- time to fill completely
+local fillDelta = math.ceil(((limit - balanceTokens) / limit) * intervalMS)
 
 -- rejected requests don't cost anything
 -- forced requests show up here as !rejected, but with balanceTokens = 0 (drained)
@@ -61,4 +64,4 @@ if rejected == 0 then
    redis.call('PSETEX',timestampKey,intervalMS,nowMS)
 end
 
-return { balanceTokens, rejected, refillDelta }
+return { balanceTokens, rejected, retryDelta, fillDelta }
