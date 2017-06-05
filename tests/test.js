@@ -17,26 +17,27 @@ exports.redisClientConnect = function(test) {
 };
 
 exports.use = function(test) {
-    test.expect(4);
-    (function useNext(numLeft) {
-        numLeft--;
+    test.expect(8);
+    let numLeft = 3;
+    (function useNext() {
+        // 3/5000
         defaultLimiter.use('use1', function(err, res) {
             if (err) {
                 console.log('use1 error', err);
                 test.done();
                 return;
             }
-            test.equal(res, numLeft);
-            if (numLeft > -1) {
-                //prevent the next time from using the same millisecond number
+            test.equal(res.remaining, 0);
+            test.equal(res.rejected, false);
+            if (numLeft) {
                 setTimeout(function() {
-                    useNext(numLeft);
-                }, 11);
-                return;
+                    numLeft--;
+                    useNext();
+                }, 1667);
             }
-            test.done();
+            else test.done();
         });
-    }(3));
+    }());
 };
 
 exports.expires = function(test) {
@@ -47,12 +48,8 @@ exports.expires = function(test) {
         redis: redisClient,
         prefix: prefix
     });
-    limiter.use('ttl', function(err) {
-        if (err) {
-            console.log('ttl error', err);
-            test.done();
-            return;
-        }
+
+    function testTTL(cb){
         redisClient.pttl(prefix + 'ttl', function(err, res) {
             if (err) {
                 console.log('prefix ttl error', err);
@@ -60,24 +57,35 @@ exports.expires = function(test) {
                 return;
             }
             test.ok(res > 50 && res <= 250);
+            cb();
         });
+    }
 
-        setTimeout(function() {
-            limiter.use('ttl', 0, function(err, res) {
-                if (err) {
-                    console.log('ttl2 error', err);
-                    test.done();
-                    return;
-                }
-                test.equal(res, 3);
-                test.done();
-            });
-        }, 500);
+    limiter.use('ttl', function(err) {
+        if (err) {
+            console.log('ttl error', err);
+            test.done();
+            return;
+        }
+        testTTL(function(){
+            setTimeout(function() {
+                limiter.use('ttl', 0, function(err, res) {
+                    if (err) {
+                        console.log('ttl2 error', err);
+                        test.done();
+                        return;
+                    }
+                    testTTL(function(){
+                        test.done();
+                    });
+                });
+            }, 500);
+        });
     });
 };
 
 exports.rolling = function(test) {
-    test.expect(3);
+    test.expect(10);
     var limiter = new RollingLimit({
         interval: 500,
         limit: 2,
@@ -90,80 +98,100 @@ exports.rolling = function(test) {
             test.done();
             return;
         }
-        test.equal(res, 1);
+        test.equal(res.rejected, false);
+        test.equal(res.remaining, 0);
+        test.ok(res.retryDelta > 0 && res.retryDelta <= 250);
 
         setTimeout(function() {
-            //this is running sooner than 500 so there should be none left
             limiter.use('rolling100', function(err, res) {
                 if (err) {
                     console.log('rolling100 in setTimeout1 error', err);
                     return;
                 }
-                test.equal(res, 0);
+                test.equal(res.rejected, true);
+                test.ok(res.retryDelta > 0 && res.retryDelta <= 100);
+            });
+        }, 150);
+
+        setTimeout(function() {
+            limiter.use('rolling100', function(err, res) {
+                if (err) {
+                    console.log('rolling100 in setTimeout1 error', err);
+                    return;
+                }
+                test.equal(res.remaining, 0);
+                test.equal(res.rejected, false);
+                test.ok(res.retryDelta > 0 && res.retryDelta <= 200);
             });
         }, 300);
 
         setTimeout(function() {
-            //by the time this runs, the original one should've been removed
-            limiter.use('rolling100', function(err, res) {
+            limiter.use('rolling100', 0, function(err, res) {
                 if (err) {
                     console.log('rolling100 in setTimeout2 error', err);
                     test.done();
                     return;
                 }
-                test.equal(res, 0);
+                test.equal(res.remaining, 1);
+                test.equal(res.retryDelta, 0);
                 test.done();
             });
         }, 700);
     });
 };
 
-exports.fill = function(test) {
-    test.expect(2);
-    defaultLimiter.use('fill').then(function(numLeft) {
-        test.equal(numLeft, 2);
-        return defaultLimiter.fill('fill');
-    }).then(function() {
-        return defaultLimiter.use('fill');
-    }).then(function(numLeft) {
-        test.equal(numLeft, 2);
-        test.done();
-    }).catch(function(err) {
+exports.useMultipleReject = function(test) {
+    test.expect(3);
+    defaultLimiter.use('useMultipleReject', 2).then(function(res) {
+        test.equal(res.remaining, 0);
+        test.equal(res.rejected, false);
+        defaultLimiter.use('useMultipleReject', 2).then(function(res) {
+            test.equal(res.rejected, true);
+            test.done();
+        })
+    })
+    .catch(function(err){
+        console.log('useMultipleReject error', err);
         test.done();
     });
 };
 
 exports.useMultiple = function(test) {
-    test.expect(1);
-    defaultLimiter.use('use2', 2, function(err, res) {
-        if (err) {
-            console.log('use2 error', err);
+    test.expect(3);
+    defaultLimiter.use('useMultiple', 2).then(function(res) {
+        test.equal(res.remaining, 0);
+        test.equal(res.rejected, false);
+        defaultLimiter.use('useMultiple', 1).then(function(res) {
+            test.equal(res.rejected, true);
             test.done();
-            return;
-        }
-        test.equal(res, 1);
+        });
+    })
+    .catch(function(err){
+        console.log('useMultiple error', err);
         test.done();
     });
 };
 
 exports.useMoreThanLimit = function(test) {
     test.expect(1);
-    defaultLimiter.use('use4', 4, function(err, res) {
-        if (err) {
-            console.log('use4 error', err);
-            test.done();
-            return;
-        }
-        test.equal(res, -1);
-        test.done();
-    });
+    try{
+        defaultLimiter.use('use4', 4);
+    }
+    catch(err){
+        test.ok(err !== undefined);
+    }  
+    test.done();
 };
 
 exports.useZero = function(test) {
-    test.expect(1);
-    defaultLimiter.use('use0', 0).then(function(res) {
-        test.equal(res, 3);
-        test.done();
+    test.expect(3);
+    defaultLimiter.use('use0',3).then(function(res) {
+        test.equal(res.remaining, 0);
+        test.ok(res.retryDelta > 100);
+        defaultLimiter.use('use0',0).then(function(res) {
+          test.equal(res.rejected, false);
+          test.done();
+        });
     }).catch(function(err) {
         console.log('error in useZero chain', err);
         test.done();
