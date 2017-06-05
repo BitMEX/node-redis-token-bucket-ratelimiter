@@ -34,9 +34,13 @@ local retryDelta
 -- boolean verdict
 local rejected
 
+-- are we cheating tho
+local forced = false
+
 -- lets play our game
 if balanceTokens < 0 then -- we used more than we have
    if force then -- ugh, /fine/
+      forced = true
       rejected = 0
       balanceTokens = 0 -- drain the swamp
    else
@@ -64,4 +68,4 @@ if rejected == 0 then
    redis.call('PSETEX',timestampKey,intervalMS,nowMS)
 end
 
-return { balanceTokens, rejected, retryDelta, fillDelta }
+return { balanceTokens, rejected, retryDelta, fillDelta, forced }

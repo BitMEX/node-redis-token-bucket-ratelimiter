@@ -63,7 +63,8 @@ RollingLimit.prototype.use = function(id, amt, cb) {
                           res = { remaining: res[0],
                                   rejected: !!res[1],
                                   retryDelta: res[2],
-                                  fillDelta: res[3]
+                                  fillDelta: res[3],
+                                  forced: !!res[4]
                                 };
                           resolve(res);
                           callback(null, res);
