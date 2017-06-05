@@ -94,34 +94,4 @@ RollingLimit.prototype.use = function(id, amt, cb) {
     });
 };
 
-RollingLimit.prototype.fill = function(id, callback) {
-    if (callback && typeof callback !== 'function') {
-        throw new TypeError('callback must be a function');
-    }
-    log.debug('rollinglimit: fill called', {id: id});
-    return new Promise(function(resolve, reject) {
-    
-        var finished = false;
-        var cb = function(err,res){
-            if(err){
-                log.error('rollinglimit: error calling set', {
-                  id: id,
-                  error: err
-                });
-                reject(err);
-                callback(err);
-            }
-            else if(!finished) finished = true; // poor man's after(2)
-            else{
-                log.debug('rollinglimit: fill success', { id: id });
-                resolve();
-                callback();
-            }
-        };
-
-        this.redis.psetex(this.prefix + id       , this.interval, this.limit,cb);
-        this.redis.psetex(this.prefix + id + ':T', this.interval, Date.now(),cb);
-    }.bind(this));
-};
-
 module.exports = RollingLimit;
