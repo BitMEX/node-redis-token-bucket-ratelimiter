@@ -48,7 +48,7 @@ RollingLimit.prototype.use = function(id, amt, cb) {
         throw new Error('amount must be >= 0');
     }
     if (amount > this.limit) {
-        throw new Error(`amount must be < limit (${this.limit})`);
+        throw new Error('amount must be < limit (' + this.limit + ')');
     }
 
     if(!callback) callback = function(){};
