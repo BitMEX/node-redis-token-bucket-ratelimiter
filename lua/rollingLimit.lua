@@ -8,64 +8,71 @@ local force      = ARGV[5] == "true"
 
 local timestampKey = key .. ":T"
 
-local prevTokens = redis.call('GET',key)
 local lastUpdateMS
+local prevTokens
+   
+local initialTokens = redis.call('GET',key)
+local initialUpdateMS = false
 
-if prevTokens == false then
-   prevTokens = amount
-   lastUpdateMS = nowMS
+if initialTokens == false then
+   prevTokens = 0
+   lastUpdateMS = nowMS - intervalMS
 else
-   lastUpdateMS = redis.call('GET',timestampKey)
-   if(lastUpdateMS == false) then lastUpdateMS = nowMS end
+   prevTokens = initialTokens
+   initialUpdateMS = redis.call('GET',timestampKey)
+   
+   if(initialUpdateMS == false) then
+      lastUpdateMS = nowMS - ((prevTokens / limit) * intervalMS)
+   else
+      lastUpdateMS = initialUpdateMS
+   end
 end
 
 -- tokens that should have been added by now
 local addTokens = ((nowMS - lastUpdateMS) / intervalMS) * limit
 
 -- calculated token balance coming into this transaction
-local newTokens = math.min(prevTokens + addTokens, limit)
+local grossTokens = math.min(prevTokens + addTokens, limit)
 
 -- token balance after trying this transaction
-local balanceTokens = newTokens - amount
+local netTokens = grossTokens - amount
 
 -- time to fill enough to retry this amount
-local retryDelta
+local retryDelta = 0
 
--- boolean verdict
-local rejected
-
--- are we cheating tho
+local rejected = false
 local forced = false
 
--- lets play our game
-if balanceTokens < 0 then -- we used more than we have
-   if force then -- ugh, /fine/
+if netTokens < 0 then -- we used more than we have
+   if force then
       forced = true
-      rejected = 0
-      balanceTokens = 0 -- drain the swamp
+      netTokens = 0 -- drain the swamp
    else
-      rejected = 1
-      balanceTokens = newTokens -- rejection doesn't eat tokens
+      rejected = true
+      netTokens = grossTokens -- rejection doesn't eat tokens
    end
-   retryDelta = math.ceil(((amount - balanceTokens) / limit) * intervalMS)
+   retryDelta = math.ceil(((amount - netTokens) / limit) * intervalMS)
 else -- polite transaction
-   rejected = 0
-   local nextBalance = balanceTokens - amount
-   if(nextBalance < 0) then -- will need to wait to repeat
-      retryDelta = math.ceil(((0 - nextBalance) / limit) * intervalMS)
-   else -- can repeat with current balance, no wait
-      retryDelta = 0
+   local nextNet = netTokens - amount
+   if nextNet < 0 then -- will need to wait to repeat
+      retryDelta = math.ceil((math.abs(nextNet) / limit) * intervalMS)
    end
 end
 
 -- time to fill completely
-local fillDelta = math.ceil(((limit - balanceTokens) / limit) * intervalMS)
+local fillDelta = math.ceil(((limit - netTokens) / limit) * intervalMS)
 
 -- rejected requests don't cost anything
--- forced requests show up here as !rejected, but with balanceTokens = 0 (drained)
-if rejected == 0 then
-   redis.call('PSETEX',key,intervalMS,balanceTokens)
-   redis.call('PSETEX',timestampKey,intervalMS,nowMS)
+-- forced requests show up here as !rejected, but with netTokens = 0 (drained)
+if rejected == false then
+
+   redis.call('PSETEX',key,intervalMS,netTokens)
+   
+   if addTokens > 0 or initialUpdateMS == false then
+      redis.call('PSETEX',timestampKey,intervalMS,nowMS)
+   else
+      redis.call('PEXPIRE',timestampKey,intervalMS)
+   end
 end
 
-return { balanceTokens, rejected, retryDelta, fillDelta, forced }
+return { netTokens, rejected, retryDelta, fillDelta, forced }
