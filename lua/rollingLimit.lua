@@ -15,13 +15,16 @@ local initialTokens = redis.call('GET',key)
 local initialUpdateMS = false
 
 if initialTokens == false then
+   -- If we found no record, we temporarily rewind the clock to refill
+   -- via addTokens below
    prevTokens = 0
    lastUpdateMS = nowMS - intervalMS
 else
    prevTokens = initialTokens
    initialUpdateMS = redis.call('GET',timestampKey)
    
-   if(initialUpdateMS == false) then
+   if(initialUpdateMS == false) then -- this is a corruption
+      -- we make up a time that would fill this limit via addTokens below
       lastUpdateMS = nowMS - ((prevTokens / limit) * intervalMS)
    else
       lastUpdateMS = initialUpdateMS
@@ -59,9 +62,6 @@ else -- polite transaction
    end
 end
 
--- time to fill completely
-local fillDelta = math.ceil(((limit - netTokens) / limit) * intervalMS)
-
 -- rejected requests don't cost anything
 -- forced requests show up here as !rejected, but with netTokens = 0 (drained)
 if rejected == false then
@@ -75,4 +75,4 @@ if rejected == false then
    end
 end
 
-return { netTokens, rejected, retryDelta, fillDelta, forced }
+return { netTokens, rejected, retryDelta, forced }
