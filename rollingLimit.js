@@ -22,15 +22,19 @@ class RollingLimit {
     if (options.force && typeof options.force !== 'boolean') {
       throw new TypeError('force must be a boolean');
     }
-    if (options.prefix && typeof options.prefix !== 'string') {
-      throw new TypeError('prefix must be a string');
+    if (options.prefix) {
+      if(typeof options.prefix !== 'string') {
+        throw new TypeError('prefix must be a string');
+      }
+      
+      if(!/:$/.test(options.prefix)) options.prefix += ':';
     }
-    
+
     this.interval = options.interval;
     this.limit = options.limit;
     this.redis = options.redis;
-    this.prefix = `${options.prefix}limit:`;
-    this.force = options.force ? "true" : "false";
+    this.prefix = options.prefix || 'limit:';
+    this.force = options.force ? 'true' : 'false';
   }
   
   use(id, amount){
@@ -44,19 +48,29 @@ class RollingLimit {
       
       const success = res => {
         resolve({
-          limit: this.limit,
-          remaining: res[0],
-          rejected: Boolean(res[1]),
+          limit:      this.limit,
+          remaining:  res[0],
+          rejected:   Boolean(res[1]),
           retryDelta: res[2],
-          forced: Boolean(res[3]),
+          forced:     Boolean(res[3])
         });
       };
+
+      const redisKeysAndArgs = [
+        1,                // We're sending 1 KEY
+        this.prefix + id, // KEYS[1]
+        this.limit,       // ARGV[1]
+        this.interval,    // ARGV[2]
+        Date.now(),       // ARGV[3]
+        amount,           // ARGV[4]
+        this.force        // ARGV[5]
+      ];
       
-      this.redis.evalsha(luaScript.sha1, 1, this.prefix + id, this.limit, this.interval, Date.now(), amount, this.force, (err, res) => {
+      this.redis.evalsha(luaScript.sha1, ...redisKeysAndArgs, (err, res) => {
         if (!err) success(res);
         else if (err instanceof Error && err.message.includes('NOSCRIPT')) {
           // Script is missing, invoke again while providing the entire script
-          this.redis.eval(luaScript.script, 1, this.prefix + id, this.limit, this.interval, Date.now(), amount, this.force, (err, res) => {
+          this.redis.eval(luaScript.script, ...redisKeysAndArgs, (err, res) => {
             if (err) reject(err);
             else success(res);
           });
