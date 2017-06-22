@@ -1,5 +1,5 @@
 {
-  "name": "redis-token-bucket",
+  "name": "redis-token-bucket-ratelimiter",
   "version": "0.1.0",
   "description": "Rolling rate limit in redis via a lua script",
   "main": "rollingLimit.js",
@@ -17,7 +17,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:BitMEX/node-redis-token-bucket.git"
+    "url": "git@github.com:BitMEX/node-redis-token-bucket-ratelimiter.git"
   },
   "keywords": [
     "node",
@@ -28,9 +28,6 @@
   ],
   "license": "MIT",
   "readmeFilename": "README.md",
-  "dependencies": {
-    "levenlabs-log": "^0.1.1"
-  },
   "publishConfig": {
     "registry": "https://npm.develsea.com"
   }
