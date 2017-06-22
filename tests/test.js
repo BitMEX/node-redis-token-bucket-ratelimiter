@@ -53,7 +53,7 @@ exports.expires = function(test) {
   });
   
   limiter.use('ttl').then(function(res) {
-    redisClient.pttl(prefix + 'limit:ttl', function(err, res) {
+    redisClient.pttl(prefix + 'limit:ttl:V', function(err, res) {
       if (err) {
         console.log('prefix ttl error', err);
         test.done();
@@ -65,7 +65,7 @@ exports.expires = function(test) {
     
     setTimeout(function() {
       limiter.use('ttl').then(function(res) {
-        redisClient.pttl(prefix + 'limit:ttl', function(err, res) {
+        redisClient.pttl(prefix + 'limit:ttl:V', function(err, res) {
           if (err) console.log('prefix ttl error', err);
           else {
             test.ok(50 < res && res <= 250);

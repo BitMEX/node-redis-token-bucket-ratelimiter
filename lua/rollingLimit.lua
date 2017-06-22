@@ -6,12 +6,13 @@ local nowMS      = tonumber(ARGV[3])
 local amount     = math.max(tonumber(ARGV[4]), 0)
 local force      = ARGV[5] == "true"
 
+local valueKey = key .. ":V"
 local timestampKey = key .. ":T"
 
 local lastUpdateMS
 local prevTokens
    
-local initialTokens = redis.call('GET',key)
+local initialTokens = redis.call('GET',valueKey)
 local initialUpdateMS = false
 
 if initialTokens == false then
@@ -54,23 +55,28 @@ if netTokens < 0 then -- we used more than we have
       rejected = true
       netTokens = grossTokens -- rejection doesn't eat tokens
    end
+   -- == percentage of `intervalMS` required before you have `amount` tokens
    retryDelta = math.ceil(((amount - netTokens) / limit) * intervalMS)
 else -- polite transaction
+   -- nextNet == pretend we did this again...
    local nextNet = netTokens - amount
-   if nextNet < 0 then -- will need to wait to repeat
+   if nextNet < 0 then -- ...we would need to wait to repeat
+      -- == percentage of `invervalMS` required before you would have `amount` tokens again
       retryDelta = math.ceil((math.abs(nextNet) / limit) * intervalMS)
    end
 end
 
--- rejected requests don't cost anything
+-- rejected requests don't cost anything, we'll wait for a costly request to update our values
 -- forced requests show up here as !rejected, but with netTokens = 0 (drained)
 if rejected == false then
 
-   redis.call('PSETEX',key,intervalMS,netTokens)
+   redis.call('PSETEX',valueKey,intervalMS,netTokens)
    
    if addTokens > 0 or initialUpdateMS == false then
+      -- we filled some tokens, so update our timestamp
       redis.call('PSETEX',timestampKey,intervalMS,nowMS)
    else
+      -- we didn't fill any tokens, so just renew the timestamp so it survives with the value
       redis.call('PEXPIRE',timestampKey,intervalMS)
    end
 end
