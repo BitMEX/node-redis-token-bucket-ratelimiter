@@ -55,13 +55,20 @@ RollingLimit.prototype.use = function(id, amount) {
     };
     
     _this.redis.evalsha(luaScript.sha1, 1, _this.prefix + id, _this.limit, _this.interval, Date.now(), amount, _this.force, function(err, res) {
-      if (!err) return success(res);
-      if (!(err instanceof Error) || err.message.indexOf('NOSCRIPT') === -1) return reject(err);
-      _this.redis.eval(luaScript.script, 1, _this.prefix + id, _this.limit, _this.interval, Date.now(), amount, _this.force, function(err, res) {
-        if (err) return reject(err);
-        return success(res);
-      });
+      if (!err) success(res);
+      else if (err instanceof Error && err.message.includes('NOSCRIPT')) {
+        // Script is missing, invoke again while providing the entire script
+        _this.redis.eval(luaScript.script, 1, _this.prefix + id, _this.limit, _this.interval, Date.now(), amount, _this.force, function(err, res) {
+          if (err) reject(err);
+          else success(res);
+        });
+      }
+      else{
+        // All other errors
+        reject(err);
+      }
     });
+    
   });
 };
 
