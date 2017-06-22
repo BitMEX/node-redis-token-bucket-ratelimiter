@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Rolling rate limit in redis via a lua script",
   "main": "rollingLimit.js",
+  "engines": {
+    "node": ">= 6.10.0"
+  },
   "directories": {
     "test": "tests"
   },
