@@ -1,116 +1,99 @@
-var util = require('util'),
-    log = require('levenlabs-log'),
-    luaScript = require('./lua/rollingLimit.lua.json');
+const luaScript = require('./lua/rollingLimit.lua.json');
 
-function RollingLimit(options) {
+class RollingLimit {
+
+  constructor(options){
+    
     if (typeof options !== 'object' || options === null) {
-        throw new TypeError('options must be an object');
+      throw new TypeError('options must be an object');
     }
     if (typeof options.interval !== 'number') {
-        throw new TypeError('interval must be a number');
+      throw new TypeError('interval must be a number');
     }
     if (typeof options.limit !== 'number') {
-        throw new TypeError('limit must be a number');
+      throw new TypeError('limit must be a number');
     }
-    //noinspection JSLint
+    if (options.limit <= 0) {
+      throw new Error('limit must be > 0');
+    }
     if (!options.redis || typeof options.redis.eval !== 'function') {
-        throw new TypeError('redis must be an instance of RedisClient');
+      throw new TypeError('redis must be an instance of RedisClient');
     }
-    if (options.prefix && typeof options.prefix !== 'string') {
+    if (options.force && typeof options.force !== 'boolean') {
+      throw new TypeError('force must be a boolean');
+    }
+    if (options.prefix) {
+      if(typeof options.prefix !== 'string') {
         throw new TypeError('prefix must be a string');
+      }
+      
+      if(!/:$/.test(options.prefix)) options.prefix += ':';
     }
+
     this.interval = options.interval;
     this.limit = options.limit;
     this.redis = options.redis;
-    this.prefix = options.prefix || '';
-}
-
-RollingLimit.prototype.use = function(id, amt, cb) {
-    var amount = amt,
-        callback = cb,
-        _this = this;
-    if (typeof amount === 'function' || amount == null) {
-        callback = amount;
-        amount = 1;
-    }
-    if (callback && typeof callback !== 'function') {
-        throw new TypeError('callback must be a function');
-    }
-    log.debug('rollinglimit: use called', {id: id, amount: amount});
-    return new Promise(function(resolve, reject) {
-        _this.redis.evalsha(luaScript.sha1, 1, _this.prefix + id, _this.limit, _this.interval, Date.now(), amount, function(err, res) {
-            if (!err) {
-                log.debug('rollinglimit: use success', {
-                    id: id,
-                    result: res
-                });
-                resolve(res);
-                if (callback) {
-                    callback(null, res);
-                }
-                return;
-            }
-            //handle errors
-            //NOSCRIPT just means it hasn't been cached yet
-            if (!(err instanceof Error) || err.message.indexOf('NOSCRIPT') === -1) {
-                log.error('rollinglimit: error calling evalsh', {
-                    id: id,
-                    error: err
-                });
-                reject(err);
-                if (callback) {
-                    callback(err, 0);
-                }
-                return;
-            }
-            //noinspection JSLint
-            _this.redis.eval(luaScript.script, 1, _this.prefix + id, _this.limit, _this.interval, Date.now(), amount, function(err, res) {
-                if (err) {
-                    log.error('rollinglimit: error calling eval', {
-                        id: id,
-                        error: err
-                    });
-                    reject(err);
-                } else {
-                    log.debug('rollinglimit: use success', {
-                        id: id,
-                        result: res
-                    });
-                    resolve(res);
-                }
-                if (callback) {
-                    callback(err, res);
-                }
-            });
+    this.prefix = options.prefix || 'limit:';
+    this.force = options.force ? 'true' : 'false';
+  }
+  
+  use(id, amount){
+    
+    if (amount === undefined) amount = 1;
+    
+    if (amount < 0) return Promise.reject(new Error('amount must be >= 0'));
+    if (amount > this.limit) return Promise.reject(new Error(`amount must be < limit (${this.limit})`));
+    
+    return new Promise((resolve, reject) => {
+      
+      const success = res => {
+        resolve({
+          limit:      this.limit,
+          remaining:  res[0],
+          rejected:   Boolean(res[1]),
+          retryDelta: res[2],
+          forced:     Boolean(res[3])
         });
+      };
+
+      const redisKeysAndArgs = [
+        1,                // We're sending 1 KEY
+        this.prefix + id, // KEYS[1]
+        this.limit,       // ARGV[1]
+        this.interval,    // ARGV[2]
+        Date.now(),       // ARGV[3]
+        amount,           // ARGV[4]
+        this.force        // ARGV[5]
+      ];
+      
+      this.redis.evalsha(luaScript.sha1, ...redisKeysAndArgs, (err, res) => {
+        if (!err) success(res);
+        else if (err instanceof Error && err.message.includes('NOSCRIPT')) {
+          // Script is missing, invoke again while providing the entire script
+          this.redis.eval(luaScript.script, ...redisKeysAndArgs, (err, res) => {
+            if (err) reject(err);
+            else success(res);
+          });
+        }
+        else reject(err); // All other errors
+      });
+      
     });
-};
-
-RollingLimit.prototype.fill = function(id, callback) {
-    if (callback && typeof callback !== 'function') {
-        throw new TypeError('callback must be a function');
-    }
-    log.debug('rollinglimit: fill called', {id: id});
-    return new Promise(function(resolve, reject) {
-        this.redis.zremrangebyrank(this.prefix + id, 0, -1, function(err, res) {
-            if (err) {
-                log.error('rollinglimit: error calling zremrangebyrank', {
-                    id: id,
-                    error: err
-                });
-                reject(err);
-            } else {
-                log.debug('rollinglimit: fill success', {
-                    id: id,
-                    result: res
-                });
-                resolve();
-            }
-            if (callback) {
-                callback(err);
-            }
-        });
-    }.bind(this));
-};
+  };
+  
+  static stubLimit(max){
+    
+    if(max === undefined) max = Infinity;
+    
+    return {
+      limit: max,
+      remaining: max,
+      rejected: false,
+      forced: true,
+      retryDelta: 0
+    };
+  }
+  
+}
 
 module.exports = RollingLimit;

@@ -1,8 +1,11 @@
 {
-  "name": "redis-rolling-limit",
-  "version": "0.3.0",
+  "name": "redis-token-bucket-ratelimiter",
+  "version": "0.1.0",
   "description": "Rolling rate limit in redis via a lua script",
   "main": "rollingLimit.js",
+  "engines": {
+    "node": ">= 6.10.0"
+  },
   "directories": {
     "test": "tests"
   },
@@ -12,11 +15,12 @@
     "sha1": "^1.1.1"
   },
   "scripts": {
-    "test": "nodeunit tests"
+    "test": "nodeunit tests",
+    "build": "node ./build/hashLua.js ./lua/rollingLimit.lua"
   },
   "repository": {
     "type": "git",
-    "url": "git://github.com/fastest963/node-redis-rolling-limit.git"
+    "url": "git@github.com:BitMEX/node-redis-token-bucket-ratelimiter.git"
   },
   "keywords": [
     "node",
@@ -25,10 +29,9 @@
     "limit",
     "token bucket"
   ],
-  "author": "James Hartig <fastest963@gmail.com>",
   "license": "MIT",
   "readmeFilename": "README.md",
-  "dependencies": {
-    "levenlabs-log": "^0.1.1"
+  "publishConfig": {
+    "registry": "https://npm.develsea.com"
   }
 }
