@@ -1,9 +1,10 @@
+'use strict';
 const luaScript = require('./lua/rollingLimit.lua.json');
+const promisify = require('util.promisify');
 
 class RollingLimit {
 
-  constructor(options){
-    
+  constructor(options) {
     if (typeof options !== 'object' || options === null) {
       throw new TypeError('options must be an object');
     }
@@ -22,39 +23,28 @@ class RollingLimit {
     if (options.force && typeof options.force !== 'boolean') {
       throw new TypeError('force must be a boolean');
     }
-    if (options.prefix) {
-      if(typeof options.prefix !== 'string') {
-        throw new TypeError('prefix must be a string');
-      }
-      
-      if(!/:$/.test(options.prefix)) options.prefix += ':';
+    if (options.prefix && typeof options.prefix !== 'string') {
+      throw new TypeError('prefix must be a string');
     }
 
     this.interval = options.interval;
     this.limit = options.limit;
     this.redis = options.redis;
     this.prefix = options.prefix || 'limit:';
+    if(!/:$/.test(this.prefix)) this.prefix += ':';
     this.force = options.force ? 'true' : 'false';
+    if (!this.redis.evalshaAsync) {
+      this.redis.evalshaAsync = promisify(this.redis.evalsha).bind(this.redis);
+      this.redis.evalAsync = promisify(this.redis.eval).bind(this.redis);
+    }
   }
-  
+
   use(id, amount){
-    
-    if (amount === undefined) amount = 1;
-    
-    if (amount < 0) return Promise.reject(new Error('amount must be >= 0'));
-    if (amount > this.limit) return Promise.reject(new Error(`amount must be < limit (${this.limit})`));
-    
-    return new Promise((resolve, reject) => {
-      
-      const success = res => {
-        resolve({
-          limit:      this.limit,
-          remaining:  res[0],
-          rejected:   Boolean(res[1]),
-          retryDelta: res[2],
-          forced:     Boolean(res[3])
-        });
-      };
+    return Promise.resolve()
+    .then(() => {
+      if (amount == null) amount = 1;
+      if (amount < 0) throw new Error('amount must be >= 0');
+      if (amount > this.limit) throw new Error(`amount must be < limit (${this.limit})`);
 
       const redisKeysAndArgs = [
         1,                // We're sending 1 KEY
@@ -65,26 +55,31 @@ class RollingLimit {
         amount,           // ARGV[4]
         this.force        // ARGV[5]
       ];
-      
-      this.redis.evalsha(luaScript.sha1, ...redisKeysAndArgs, (err, res) => {
-        if (!err) success(res);
-        else if (err instanceof Error && err.message.includes('NOSCRIPT')) {
+
+      return this.redis.evalshaAsync(luaScript.sha1, ...redisKeysAndArgs)
+      .catch((err) => {
+        if (err instanceof Error && err.message.includes('NOSCRIPT')) {
           // Script is missing, invoke again while providing the entire script
-          this.redis.eval(luaScript.script, ...redisKeysAndArgs, (err, res) => {
-            if (err) reject(err);
-            else success(res);
-          });
+          return this.redis.evalAsync(luaScript.script, ...redisKeysAndArgs);
         }
-        else reject(err); // All other errors
+        // Other error
+        throw err;
+      })
+      .then((res) => {
+        return {
+          limit:      this.limit,
+          remaining:  res[0],
+          rejected:   Boolean(res[1]),
+          retryDelta: res[2],
+          forced:     Boolean(res[3])
+        };
       });
-      
     });
-  };
-  
+  }
+
   static stubLimit(max){
-    
-    if(max === undefined) max = Infinity;
-    
+    if(max == null) max = Infinity;
+
     return {
       limit: max,
       remaining: max,
@@ -93,7 +88,6 @@ class RollingLimit {
       retryDelta: 0
     };
   }
-  
 }
 
 module.exports = RollingLimit;
