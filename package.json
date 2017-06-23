@@ -7,16 +7,22 @@
     "node": ">= 6.10.0"
   },
   "directories": {
-    "test": "tests"
+    "test": "test/"
   },
   "devDependencies": {
-    "nodeunit": "^0.9.1",
+    "bluebird": "^3.5.0",
+    "eslint": "^4.0.0",
+    "intelli-espower-loader": "^1.0.1",
+    "mocha": "^3.4.2",
+    "power-assert": "^1.4.4",
+    "pre-commit": "^1.2.2",
     "redis": "^0.12.1",
     "sha1": "^1.1.1"
   },
   "scripts": {
-    "test": "nodeunit tests",
-    "build": "node ./build/hashLua.js ./lua/rollingLimit.lua"
+    "test": "mocha --require intelli-espower-loader test/",
+    "build": "node ./build/hashLua.js ./lua/rollingLimit.lua",
+    "lint": "eslint ."
   },
   "repository": {
     "type": "git",
@@ -33,5 +39,13 @@
   "readmeFilename": "README.md",
   "publishConfig": {
     "registry": "https://npm.develsea.com"
-  }
+  },
+  "dependencies": {
+    "util.promisify": "^1.0.0"
+  },
+  "pre-commit": [
+    "build",
+    "lint",
+    "test"
+  ]
 }
