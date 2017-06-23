@@ -1,6 +1,6 @@
 {
   "name": "redis-token-bucket-ratelimiter",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Rolling rate limit in redis via a lua script",
   "main": "rollingLimit.js",
   "engines": {
