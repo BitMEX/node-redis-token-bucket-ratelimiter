@@ -13,6 +13,7 @@
     "bluebird": "^3.5.0",
     "eslint": "^4.0.0",
     "intelli-espower-loader": "^1.0.1",
+    "ioredis": "^3.2.2",
     "mocha": "^3.4.2",
     "power-assert": "^1.4.4",
     "pre-commit": "^1.2.2",
@@ -20,7 +21,8 @@
     "sha1": "^1.1.1"
   },
   "scripts": {
-    "test": "mocha --require intelli-espower-loader test/",
+    "test": "mocha --require intelli-espower-loader test/test.js",
+    "test-cluster": "mocha --require intelli-espower-loader test/test-cluster.js",
     "build": "node ./build/hashLua.js ./lua/rollingLimit.lua",
     "lint": "eslint ."
   },
