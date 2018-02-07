@@ -61,7 +61,7 @@ describe('Ratelimiter', () => {
     return limiter.use('ttl')
     .then((res) => {
       assert(res.remaining === 2);
-      return redisClient.pttlAsync(prefix + ':ttl:V')
+      return redisClient.pttlAsync(prefix + ':{ttl}:V')
       .then((res) => {
         assert(50 < res && res <= 250);
       })
@@ -70,7 +70,7 @@ describe('Ratelimiter', () => {
     .then(() => limiter.use('ttl'))
     .then((res) => {
       assert(res.remaining === 2);
-      return redisClient.pttlAsync(prefix + ':ttl:V')
+      return redisClient.pttlAsync(prefix + ':{ttl}:V')
       .then((res) => {
         assert(50 < res && res <= 250);
       })
@@ -130,7 +130,7 @@ describe('Ratelimiter', () => {
     })
   });
 
-  it('Deduction of zero (stub deduction', () => {
+  it('Deduction of zero (stub deduction)', () => {
     return defaultLimiter.use('use0', 3)
     .then((res) => {
       assert.equal(res.remaining, 0);

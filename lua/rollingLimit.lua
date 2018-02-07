@@ -1,17 +1,15 @@
--- key limit intervalMS nowMS [amount]
-local key        = KEYS[1]
+-- valueKey timestampKey | limit intervalMS nowMS [amount]
+local valueKey     = KEYS[1] -- "limit:1:V"
+local timestampKey = KEYS[2] -- "limit:1:T"
 local limit      = tonumber(ARGV[1])
 local intervalMS = tonumber(ARGV[2])
 local nowMS      = tonumber(ARGV[3])
 local amount     = math.max(tonumber(ARGV[4]), 0)
 local force      = ARGV[5] == "true"
 
-local valueKey = key .. ":V"
-local timestampKey = key .. ":T"
-
 local lastUpdateMS
 local prevTokens
-   
+
 local initialTokens = redis.call('GET',valueKey)
 local initialUpdateMS = false
 
@@ -23,7 +21,7 @@ if initialTokens == false then
 else
    prevTokens = initialTokens
    initialUpdateMS = redis.call('GET',timestampKey)
-   
+
    if(initialUpdateMS == false) then -- this is a corruption
       -- we make up a time that would fill this limit via addTokens below
       lastUpdateMS = nowMS - ((prevTokens / limit) * intervalMS)
@@ -71,7 +69,7 @@ end
 if rejected == false then
 
    redis.call('PSETEX',valueKey,intervalMS,netTokens)
-   
+
    if addTokens > 0 or initialUpdateMS == false then
       -- we filled some tokens, so update our timestamp
       redis.call('PSETEX',timestampKey,intervalMS,nowMS)
