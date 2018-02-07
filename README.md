@@ -4,6 +4,8 @@ A rolling rate limit using Redis. Original idea from [Peter Hayes](https://engin
 Uses a lua script for atomic operations and to prevent blocked actions from substracting
 from the bucket.
 
+Compatible with Redis Cluster.
+
 ### Usage ###
 
 ```JS
