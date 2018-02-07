@@ -46,9 +46,28 @@ class RollingLimit {
       if (amount < 0) throw new Error('amount must be >= 0');
       if (amount > this.limit) throw new Error(`amount must be < limit (${this.limit})`);
 
+      // Note extra curly braces (hash tag) which are needed for Cluster hash slotting
+      const keyBase = `${this.prefix}{${id}}`;
+      const valueKey = `${keyBase}:V`;
+      const timestampKey = `${keyBase}:T`;
+
+      // A note on redis EVAL:
+      // It may seem nosensical for us to specify keys separate from args, but this is a way of letting
+      // Redis know what keys we intend to operate on. By doing so, it can work with Cluster. From the docs:
+      //
+      // > All Redis commands must be analyzed before execution to determine which keys the command will operate on.
+      // > In order for this to be true for EVAL, keys must be passed explicitly. This is useful in many ways,
+      // > but especially to make sure Redis Cluster can forward your request to the appropriate cluster node.
+      //
+      // What is not stated, and is necessary to know, is that we *must* ensure all keys we operate on
+      // are on the same server by using hash tags. All this key passing does is allow Redis to do is fail properly.
+      //
+      // https://redis.io/commands/eval
+      //
       const redisKeysAndArgs = [
-        1,                // We're sending 1 KEY
-        this.prefix + id, // KEYS[1]
+        2,                // We're sending 2 KEYs
+        valueKey,         // KEYS[1]
+        timestampKey,     // KEYS[2]
         this.limit,       // ARGV[1]
         this.interval,    // ARGV[2]
         Date.now(),       // ARGV[3]
