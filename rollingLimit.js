@@ -70,9 +70,8 @@ class RollingLimit {
         timestampKey,     // KEYS[2]
         this.limit,       // ARGV[1]
         this.interval,    // ARGV[2]
-        Date.now(),       // ARGV[3]
-        amount,           // ARGV[4]
-        this.force        // ARGV[5]
+        amount,           // ARGV[3]
+        this.force        // ARGV[54]
       ];
 
       return this.redis.evalshaAsync(luaScript.sha1, ...redisKeysAndArgs)
