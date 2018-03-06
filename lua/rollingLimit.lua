@@ -31,7 +31,8 @@ else
 end
 
 -- tokens that should have been added by now
-local addTokens = ((nowMS - lastUpdateMS) / intervalMS) * limit
+-- note math.max in case this ends up negative (clock skew?)
+local addTokens = math.max(((nowMS - lastUpdateMS) / intervalMS) * limit, 0)
 
 -- calculated token balance coming into this transaction
 local grossTokens = math.min(prevTokens + addTokens, limit)
