@@ -3,6 +3,7 @@ const RollingLimit = require('../rollingLimit.js');
 const Promise = require('bluebird');
 const prefix = 'node-redis-rolling-limit-test-' + Date.now();
 const assert = require('power-assert');
+const sinon = require('sinon');
 
 function makeTestSuite(name, redisClient, lag) {
   function assertBetween(low, high, number) {
@@ -135,6 +136,31 @@ function makeTestSuite(name, redisClient, lag) {
       .then((res) => {
         assert.equal(res.rejected, false);
         assert.equal(res.retryDelta, 0);
+      });
+    });
+
+    it('Does not deduct when it should add if clock skews', () => {
+      const limiter = new RollingLimit({
+        interval: 500 + lag,
+        limit: 100,
+        redis: redisClient,
+        prefix: prefix
+      });
+      const NAME = 'clockSkewTest';
+
+      // Set the date into the future
+      const clock = sinon.useFakeTimers(Date.now() + 300);
+
+      return limiter.use(NAME, 1)
+      .then((res) => {
+        assert.equal(res.remaining, 99);
+        // Restore the clock; this should not deduct more tokens
+        clock.restore();
+        return limiter.use(NAME, 1)
+      })
+      .then((res) => {
+        assert.equal(res.remaining, 98);
+        assert.equal(res.rejected, false);
       });
     });
   });
