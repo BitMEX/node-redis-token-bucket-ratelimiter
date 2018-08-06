@@ -17,6 +17,11 @@ class RollingLimit {
     if (options.limit <= 0) {
       throw new Error('limit must be > 0');
     }
+
+    if (typeof options.refill !== 'number' || refill <= 0 ) {
+      throw new Error('refill must be a positive number');
+    }
+
     if (!options.redis || typeof options.redis.eval !== 'function') {
       throw new TypeError('redis must be an instance of RedisClient');
     }
@@ -29,6 +34,7 @@ class RollingLimit {
 
     this.interval = options.interval;
     this.limit = options.limit;
+    this.refill = options.refill;
     this.redis = options.redis;
     this.prefix = options.prefix || 'limit:';
     if(!/:$/.test(this.prefix)) this.prefix += ':';
@@ -70,8 +76,9 @@ class RollingLimit {
         timestampKey,     // KEYS[2]
         this.limit,       // ARGV[1]
         this.interval,    // ARGV[2]
-        amount,           // ARGV[3]
-        this.force        // ARGV[54]
+        this.refill,      // ARGV[3]
+        amount,           // ARGV[4]
+        this.force        // ARGV[5]
       ];
 
       return this.redis.evalshaAsync(luaScript.sha1, ...redisKeysAndArgs)

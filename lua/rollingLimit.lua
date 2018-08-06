@@ -1,10 +1,11 @@
 -- valueKey timestampKey | limit intervalMS nowMS [amount]
 local valueKey     = KEYS[1] -- "limit:1:V"
 local timestampKey = KEYS[2] -- "limit:1:T"
-local limit      = tonumber(ARGV[1])
-local intervalMS = tonumber(ARGV[2])
-local amount     = math.max(tonumber(ARGV[3]), 0)
-local force      = ARGV[4] == "true"
+local limit        = tonumber(ARGV[1])
+local intervalMS   = tonumber(ARGV[2])
+local refill       = tonumber(ARGV[3])
+local amount       = math.max(tonumber(ARGV[4]), 0)
+local force        = ARGV[5] == "true"
 
 local lastUpdateMS
 local prevTokens
@@ -21,7 +22,7 @@ local initialUpdateMS = false
 if initialTokens == false then
    -- If we found no record, we temporarily rewind the clock to refill
    -- via addTokens below
-   prevTokens = 0
+   prevTokens = limit
    lastUpdateMS = nowMS - intervalMS
 else
    prevTokens = initialTokens
@@ -38,7 +39,7 @@ end
 -- tokens that should have been added by now
 -- note math.max in case this ends up negative (clock skew?)
 -- now that we call 'TIME' this is less likely to happen
-local addTokens = math.max(((nowMS - lastUpdateMS) / intervalMS) * limit, 0)
+local addTokens = math.max(((nowMS - lastUpdateMS) / intervalMS) * refill, 0)
 
 -- calculated token balance coming into this transaction
 local grossTokens = math.min(prevTokens + addTokens, limit)
@@ -61,13 +62,13 @@ if netTokens < 0 then -- we used more than we have
       netTokens = grossTokens -- rejection doesn't eat tokens
    end
    -- == percentage of `intervalMS` required before you have `amount` tokens
-   retryDelta = math.ceil(((amount - netTokens) / limit) * intervalMS)
+   retryDelta = math.ceil(((amount - netTokens) / refill) * intervalMS)
 else -- polite transaction
    -- nextNet == pretend we did this again...
    local nextNet = netTokens - amount
    if nextNet < 0 then -- ...we would need to wait to repeat
       -- == percentage of `invervalMS` required before you would have `amount` tokens again
-      retryDelta = math.ceil((math.abs(nextNet) / limit) * intervalMS)
+      retryDelta = math.ceil((math.abs(nextNet) / refill) * intervalMS)
    end
 end
 
