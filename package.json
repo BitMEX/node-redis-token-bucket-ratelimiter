@@ -1,5 +1,5 @@
 {
-  "name": "redis-token-bucket-ratelimiter",
+  "name": "@Labelbox/redis-token-bucket-ratelimiter",
   "version": "0.4.0",
   "description": "Rolling rate limit in redis via a lua script",
   "main": "rollingLimit.js",
