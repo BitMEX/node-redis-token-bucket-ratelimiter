@@ -1,20 +1,21 @@
 'use strict';
 const RollingLimit = require('../rollingLimit.js');
-const Promise = require('bluebird');
-const prefix = 'node-redis-rolling-limit-test-' + Date.now();
-const assert = require('power-assert');
+const assert = require('assert');
 const sinon = require('sinon');
+const promisify = require('util').promisify;
 
 function makeTestSuite(name, redisClient, lag) {
   function assertBetween(low, high, number) {
     assert((low + lag / 2) <= number && number <= (high + lag));
   }
 
+  let prefix;
+
   describe(`${name} - Ratelimiter`, () => {
     let defaultLimiter;
 
     before(() => {
-      console.log('redis ready', name);
+      prefix = 'node-redis-rolling-limit-test-' + Date.now();
       defaultLimiter = new RollingLimit({
         interval: 5000,
         limit: 3,
@@ -54,19 +55,21 @@ function makeTestSuite(name, redisClient, lag) {
         redis: redisClient,
         prefix: prefix
       });
+      redisClient.pttlAsync = promisify(redisClient.pttl).bind(redisClient);
 
       return limiter.use('ttl')
       .then((res) => {
-        assert(res.remaining === 2);
+        assert.equal(res.remaining, 2);
         return redisClient.pttlAsync(prefix + ':{ttl}:V')
         .then((res) => {
           assertBetween(50, 250, res);
         })
       })
-      .then(() => Promise.delay(500 + lag))
+      .then(() => delay(500 + lag))
       .then(() => limiter.use('ttl'))
       .then((res) => {
-        assert(res.remaining === 2);
+        // Unchanged because it has reset
+        assert.equal(res.remaining, 2);
         return redisClient.pttlAsync(prefix + ':{ttl}:V')
         .then((res) => {
           assertBetween(50, 250, res);
@@ -89,20 +92,20 @@ function makeTestSuite(name, redisClient, lag) {
         assert.equal(res.remaining, 0);
         assertBetween(400, 500, res.retryDelta);
       })
-      .then(() => Promise.delay(150))
+      .then(() => delay(150))
       .then(() => limiter.use(NAME, 1))
       .then((res) => {
         assert.equal(res.rejected, true);
         assertBetween(0, 100, res.retryDelta);
       })
-      .then(() => Promise.delay(100))
+      .then(() => delay(100))
       .then(() => limiter.use(NAME, 1))
       .then((res) => {
         assert.equal(res.rejected, false);
         assert.equal(res.remaining, 0);
         assertBetween(150, 250, res.retryDelta);
       })
-      .then(() => Promise.delay(600))
+      .then(() => delay(600))
       .then(() => limiter.use(NAME, 1))
       .then((res) => {
         assert.equal(res.remaining, 1);
@@ -164,6 +167,10 @@ function makeTestSuite(name, redisClient, lag) {
       });
     });
   });
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 module.exports = {

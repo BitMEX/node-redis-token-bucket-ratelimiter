@@ -1,6 +1,5 @@
 'use strict';
 const luaScript = require('./lua/rollingLimit.lua.json');
-const promisify = require('util.promisify');
 
 class RollingLimit {
 
@@ -34,8 +33,15 @@ class RollingLimit {
     if(!/:$/.test(this.prefix)) this.prefix += ':';
     this.force = options.force ? 'true' : 'false';
     if (!this.redis.evalshaAsync) {
-      this.redis.evalshaAsync = promisify(this.redis.evalsha).bind(this.redis);
-      this.redis.evalAsync = promisify(this.redis.eval).bind(this.redis);
+      if (this.redis.Promise) {
+        // ioredis; already promisified
+        this.redis.evalshaAsync = this.redis.evalsha;
+        this.redis.evalAsync = this.redis.eval;
+      } else {
+        const promisify = require('util').promisify;
+        this.redis.evalshaAsync = promisify(this.redis.evalsha).bind(this.redis);
+        this.redis.evalAsync = promisify(this.redis.eval).bind(this.redis);
+      }
     }
   }
 
