@@ -1,4 +1,5 @@
 .travis.yml
 yarn.lock
-tests
-
+test/
+build/
+dump.rdb
