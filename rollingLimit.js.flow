@@ -1,0 +1,29 @@
+// @flow
+
+declare type NodeCallback<T = any> = (err?: Error | null, data: T) => void;
+
+export type RollingLimiterOptions = {|
+  interval: number,
+  limit: number,
+  redis: Object,
+  prefix?: string,
+  force: boolean,
+|};
+
+export type RollingLimiterResult = {|
+  limit: number,
+  remaining: number,
+  rejected: boolean,
+  retryDelta: number,
+  forced: boolean,
+|};
+
+declare export class RollingLimiter {
+  constructor(options: RollingLimiterOptions): void;
+  use(
+    id: string,
+    amount?: ?number,
+    callback?: ?NodeCallback<RollingLimiterResult>
+  ): Promise<RollingLimiterResult>;
+  static stubLimit(max?: number): RollingLimiterResult;
+}

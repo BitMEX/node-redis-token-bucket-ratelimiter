@@ -77,7 +77,7 @@ class RollingLimit {
         this.limit,       // ARGV[1]
         this.interval,    // ARGV[2]
         amount,           // ARGV[3]
-        this.force        // ARGV[54]
+        this.force        // ARGV[4]
       ];
 
       return this.redis.evalshaAsync(luaScript.sha1, ...redisKeysAndArgs)
