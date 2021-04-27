@@ -10,13 +10,13 @@
     "test": "test/"
   },
   "devDependencies": {
-    "eslint": "^6.8.0",
+    "eslint": "^7.25.0",
     "flow-bin": "^0.149.0",
-    "ioredis": "^4.16.1",
-    "mocha": "^7.1.1",
+    "ioredis": "^4.27.1",
+    "mocha": "^8.3.2",
     "pre-commit": "^1.2.2",
-    "redis": "^3.0.2",
-    "sinon": "^9.0.1"
+    "redis": "^3.1.2",
+    "sinon": "^10.0.0"
   },
   "scripts": {
     "test": "mocha test/test-ioredis.js test/test-node-redis.js",
