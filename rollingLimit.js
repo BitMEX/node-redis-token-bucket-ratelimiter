@@ -22,6 +22,9 @@ class RollingLimit {
     if (options.force && typeof options.force !== 'boolean') {
       throw new TypeError('force must be a boolean');
     }
+    if (options.allowLargerWithdrawal && typeof options.allowLargerWithdrawal !== 'boolean') {
+      throw new TypeError('allowLargerWithdrawal must be a boolean');
+    }
     if (options.prefix && typeof options.prefix !== 'string') {
       throw new TypeError('prefix must be a string');
     }
@@ -32,6 +35,7 @@ class RollingLimit {
     this.prefix = options.prefix || 'limit:';
     if(!/:$/.test(this.prefix)) this.prefix += ':';
     this.force = options.force ? 'true' : 'false';
+    this.allowLargerWithdrawal = !!options.allowLargerWithdrawal;
     if (!this.redis.evalshaAsync) {
       if (this.redis.Promise) {
         // ioredis; already promisified
@@ -50,7 +54,7 @@ class RollingLimit {
     .then(() => {
       if (amount == null) amount = 1;
       if (amount < 0) throw new Error('amount must be >= 0');
-      if (amount > this.limit) throw new Error(`amount must be < limit (${this.limit})`);
+      if (amount > this.limit && !this.allowLargerWithdrawal) throw new Error(`amount must be < limit (${this.limit})`);
 
       // Note extra curly braces (hash tag) which are needed for Cluster hash slotting
       const keyBase = `${this.prefix}{${id}}`;
@@ -77,7 +81,8 @@ class RollingLimit {
         this.limit,       // ARGV[1]
         this.interval,    // ARGV[2]
         amount,           // ARGV[3]
-        this.force        // ARGV[4]
+        this.force,       // ARGV[4]
+        this.allowLargerWithdrawal ? 'true' : 'false' // ARGV[5]
       ];
 
       return this.redis.evalshaAsync(luaScript.sha1, ...redisKeysAndArgs)

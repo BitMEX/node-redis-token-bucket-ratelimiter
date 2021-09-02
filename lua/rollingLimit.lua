@@ -5,6 +5,7 @@ local limit      = tonumber(ARGV[1])
 local intervalMS = tonumber(ARGV[2])
 local amount     = math.max(tonumber(ARGV[3]), 0)
 local force      = ARGV[4] == "true"
+local allowLargerWithdrawal = ARGV[5] == "true"
 
 local lastUpdateMS
 local prevTokens
@@ -52,16 +53,30 @@ local retryDelta = 0
 local rejected = false
 local forced = false
 
+-- Whether this withdrawal is greater than our limit
+local largerWithdrawal = false
+
 if netTokens < 0 then -- we used more than we have
    if force then
       forced = true
       netTokens = 0 -- drain the swamp
+   elseif allowLargerWithdrawal and grossTokens == limit then
+     -- If allowLargerWithdrawal, we do not reject and we allow
+     -- net tokens to remain below zero IFF the bucket is full
+     -- (ie grossTokens == limit)
+     largerWithdrawal = true
    else
       rejected = true
       netTokens = grossTokens -- rejection doesn't eat tokens
    end
    -- == percentage of `intervalMS` required before you have `amount` tokens
    retryDelta = math.ceil(((amount - netTokens) / limit) * intervalMS)
+
+   -- If this is a largerWithdrawal the retry delta is only the amount of time it
+   -- takes to refill the bucket again
+   if largerWithdrawal then
+      retryDelta = math.ceil(((limit - netTokens) / limit) * intervalMS)
+   end
 else -- polite transaction
    -- nextNet == pretend we did this again...
    local nextNet = netTokens - amount
@@ -75,14 +90,23 @@ end
 -- forced requests show up here as !rejected, but with netTokens = 0 (drained)
 if rejected == false then
 
-   redis.call('PSETEX',valueKey,intervalMS,netTokens)
+   local expirationMS = intervalMS
+
+   -- If this is a larger withdrawal, the interval will be smaller than the amount of time for the bucket
+   -- to refill. retryDelta is the amount of time it will take for the bucket to be completely full again
+   -- and so it's therefore an appropriate amount of time for the expiration
+   if largerWithdrawal then
+      expirationMS = retryDelta
+   end
+
+   redis.call('PSETEX',valueKey,expirationMS,netTokens)
 
    if addTokens > 0 or initialUpdateMS == false then
       -- we filled some tokens, so update our timestamp
-      redis.call('PSETEX',timestampKey,intervalMS,nowMS)
+      redis.call('PSETEX',timestampKey,expirationMS,nowMS)
    else
       -- we didn't fill any tokens, so just renew the timestamp so it survives with the value
-      redis.call('PEXPIRE',timestampKey,intervalMS)
+      redis.call('PEXPIRE',timestampKey,expirationMS)
    end
 end
 

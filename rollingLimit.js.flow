@@ -8,6 +8,7 @@ export type RollingLimiterOptions = {|
   redis: Object,
   prefix?: string,
   force: boolean,
+  allowLargerWithdrawal?: boolean,
 |};
 
 export type RollingLimiterResult = {|

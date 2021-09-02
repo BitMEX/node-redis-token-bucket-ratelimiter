@@ -20,6 +20,7 @@ const defaultLimiter = new RollingLimit({
   redis: redisClient,
   prefix: `${myAppVersion}:`,
   force: false,
+  allowLargerWithdrawal: false,
 });
 ```
 
@@ -89,6 +90,11 @@ type RollingLimiterOptions = {
   // This allows the limiter to go negative. Use for instances where an action must be allowed,
   // but you still want to deduct from the limit.
   force?: boolean,
+  // (optional) a boolean to allow withdrawals that are larger than the bucket size.
+  // A larger withdrawal may only occur IFF the bucket is completely full. The bucket
+  // will then be drained to a state where it has negative tokens. The next request must
+  // then wait for the bucket to refill to an appropriate state
+  allowLargerWithdrawal?: boolean,
 };
 
 type RollingLimiterResult = {
@@ -96,6 +102,8 @@ type RollingLimiterResult = {
   remaining: number,  // the number of tokens left in the bucket. Can be negative with `force`
   rejected: boolean,  // `true` if the request was rejected, `false` otherwise
   retryDelta: number, // if rejected, milliseconds to wait before making the next request
+                      // if not rejected, the milliseconds to wait before making a request
+                      // of the same amount again
   forced: boolean,    // if `true`, `force` was on (see `RollingLimiterOptions`)
 };
 ```
