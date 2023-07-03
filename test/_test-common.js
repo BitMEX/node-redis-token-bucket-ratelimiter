@@ -55,7 +55,10 @@ function makeTestSuite(name, redisClient, lag) {
         redis: redisClient,
         prefix: prefix
       });
-      redisClient.pttlAsync = promisify(redisClient.pttl).bind(redisClient);
+
+      if (typeof redisClient.pttlAsync === 'undefined') {
+        redisClient.pttlAsync = promisify(redisClient.pttl).bind(redisClient);
+      }
 
       return limiter.use('ttl')
       .then((res) => {
@@ -152,7 +155,11 @@ function makeTestSuite(name, redisClient, lag) {
       const NAME = 'clockSkewTest';
 
       // Set the date into the future
-      const clock = sinon.useFakeTimers(Date.now() + 300);
+      const clock = sinon.useFakeTimers({
+        now: Date.now() + 300,
+        // Exclude 'setImmediate' as it is used by native promises
+        toFake: ['setTimeout', 'setInterval', 'Date', 'nextTick']
+      });
 
       return limiter.use(NAME, 1)
       .then((res) => {

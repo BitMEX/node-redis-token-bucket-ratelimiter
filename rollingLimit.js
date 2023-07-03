@@ -33,11 +33,25 @@ class RollingLimit {
     if(!/:$/.test(this.prefix)) this.prefix += ':';
     this.force = options.force ? 'true' : 'false';
     if (!this.redis.evalshaAsync) {
-      if (this.redis.Promise) {
+      if (typeof this.redis.executeScript !== 'undefined') {
+        // node-redis @4...; already promisified, but different args
+        this.redis.pttlAsync = this.redis.PTTL;
+
+        const nodeRedis4Polyfill = (method, script, ...args) => {
+          return this.redis[method](script, {
+            keys: args.slice(1, args[0] + 1),
+            arguments: args.slice(args[0] + 1).map((a) => String(a)),
+          });
+        }
+
+        this.redis.evalshaAsync = (script, ...args) => nodeRedis4Polyfill('evalSha', script, ...args);
+        this.redis.evalAsync = (script, ...args) => nodeRedis4Polyfill('eval', script, ...args);
+      } else if (this.redis.Promise) {
         // ioredis; already promisified
         this.redis.evalshaAsync = this.redis.evalsha;
         this.redis.evalAsync = this.redis.eval;
       } else {
+        // node-redis @3...
         const promisify = require('util').promisify;
         this.redis.evalshaAsync = promisify(this.redis.evalsha).bind(this.redis);
         this.redis.evalAsync = promisify(this.redis.eval).bind(this.redis);
@@ -79,7 +93,6 @@ class RollingLimit {
         amount,           // ARGV[3]
         this.force        // ARGV[4]
       ];
-
       return this.redis.evalshaAsync(luaScript.sha1, ...redisKeysAndArgs)
       .catch((err) => {
         if (err instanceof Error && err.message.includes('NOSCRIPT')) {
