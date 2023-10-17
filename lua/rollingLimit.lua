@@ -75,11 +75,11 @@ end
 -- forced requests show up here as !rejected, but with netTokens = 0 (drained)
 if rejected == false then
 
-   redis.call('PSETEX',valueKey,intervalMS,netTokens)
+   redis.call('SET',valueKey,netTokens,'PX',intervalMS)
 
    if addTokens > 0 or initialUpdateMS == false then
       -- we filled some tokens, so update our timestamp
-      redis.call('PSETEX',timestampKey,intervalMS,nowMS)
+      redis.call('SET',timestampKey,nowMS,'PX',intervalMS)
    else
       -- we didn't fill any tokens, so just renew the timestamp so it survives with the value
       redis.call('PEXPIRE',timestampKey,intervalMS)
